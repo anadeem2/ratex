@@ -1698,7 +1698,7 @@ lazy_tensors::Shape RAFNodeLowering::InferEmbedding(const ir::ops::Embedding* no
   return ToLTCShape(body->checked_type());
 }
 
-lazy_tensors::Shape RAFNodeLowering::InferMatmul(const ir::ops::Matmul* node) {
+lazy_tensors::Shape RAFNodeLowering::InferMatMul(const ir::Node* node) {
   std::vector<Var> ops;
   for (const auto& x : node->operands()) {
     ops.push_back(MakeVar("operand", ToRAFType(x.shape())));

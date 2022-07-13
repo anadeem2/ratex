@@ -1065,6 +1065,17 @@ at::Tensor LazyNativeFunctions::dot(const at::Tensor& self, const at::Tensor& te
   return matmul(self, tensor);
 }
 
+at::Tensor LazyNativeFunctions::dropout(const at::Tensor & input, double p, bool train){
+  // return FALLBACK_ATEN_OP(dropout, input,p, train);
+  //   LazyTensor self_tensor = bridge::raf_backend::GetLtcTensor(input);
+  // return bridge::AtenFromLtcTensor(bridge::raf_backend::CreateFrom(self_tensor, 
+  // ir::MakeNode<ir::ops::Unimplemented>(self_tensor.GetIrValue(), "dropout")));
+  // return bridge::AtenFromLtcTensor(LazyTensor::dropout(bridge::raf_backend::GetLtcTensor(input), p, train));
+  return bridge::AtenFromLtcTensor(LazyTensor::sqrt(bridge::raf_backend::GetLtcTensor(input)));
+    // return aten_autograd_ops::Dropout::apply(input, p, train);
+}
+
+
 at::Tensor LazyNativeFunctions::elu(const at::Tensor& self, const at::Scalar& alpha,
                                     const at::Scalar& scale, const at::Scalar& input_scale) {
   LTC_FN_COUNTER("raf::");

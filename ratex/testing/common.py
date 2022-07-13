@@ -276,6 +276,7 @@ def train(
     set_to_none=True,
     acc_grad_steps=None,
     force_one_hot=True,
+    jit_script=True
 ):
     """Run training."""
     if optimizer_params is None:
@@ -291,7 +292,7 @@ def train(
     model.train()
 
     optimizer = optimizer(model.parameters(), **optimizer_params)
-    if "lazy" in device:
+    if "lazy" in device and jit_script:
         model = ratex.jit.script(model)
 
     for epoch in range(num_epochs):
