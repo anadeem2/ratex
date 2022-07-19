@@ -17,6 +17,8 @@ namespace ops {
 extern const OpKindWrapper raf_relay_expr;
 extern const OpKindWrapper raf_relay_function;
 extern const OpKindWrapper raf_log_softmax_backward_use_in;
+extern const OpKindWrapper unimplemented;
+extern const OpKindWrapper raf_dropout_backward;
 
 }  // namespace ops
 }  // namespace ir

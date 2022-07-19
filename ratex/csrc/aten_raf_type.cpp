@@ -39,6 +39,7 @@
 #include "ratex/csrc/aten_raf_bridge.h"
 #include "ratex/csrc/utils/debug.h"
 #include "ratex/csrc/utils/ratex_logging.h"
+#include "ratex/csrc/ops/unimplemented.h"
 
 // [Implementation Guidelines]
 // - If you want to call a at::func which doesn't exist in AtenRAFType,
@@ -1066,13 +1067,7 @@ at::Tensor LazyNativeFunctions::dot(const at::Tensor& self, const at::Tensor& te
 }
 
 at::Tensor LazyNativeFunctions::dropout(const at::Tensor & input, double p, bool train){
-  // return FALLBACK_ATEN_OP(dropout, input,p, train);
-  //   LazyTensor self_tensor = bridge::raf_backend::GetLtcTensor(input);
-  // return bridge::AtenFromLtcTensor(bridge::raf_backend::CreateFrom(self_tensor, 
-  // ir::MakeNode<ir::ops::Unimplemented>(self_tensor.GetIrValue(), "dropout")));
-  // return bridge::AtenFromLtcTensor(LazyTensor::dropout(bridge::raf_backend::GetLtcTensor(input), p, train));
-  return bridge::AtenFromLtcTensor(LazyTensor::sqrt(bridge::raf_backend::GetLtcTensor(input)));
-    // return aten_autograd_ops::Dropout::apply(input, p, train);
+  return aten_autograd_ops::Dropout::apply(input, p, train);
 }
 
 
@@ -1487,6 +1482,13 @@ at::Tensor LazyNativeFunctions::l1_loss_backward(const at::Tensor& grad_output,
       bridge::raf_backend::GetLtcTensor(target), reduction));
 }
 
+at::Tensor LazyNativeFunctions::layer_norm(const at::Tensor & input, at::IntArrayRef normalized_shape, const c10::optional<at::Tensor> & weight, const c10::optional<at::Tensor> & bias, double eps, bool cudnn_enable){
+  LazyTensor self_tensor = bridge::raf_backend::GetLtcTensor(input);
+  LazyTensor weight_tensor = bridge::GetOrCreateLtcTensor(weight, self_tensor.GetDevice());
+  LazyTensor bias_tensor = bridge::GetOrCreateLtcTensor(bias, self_tensor.GetDevice());
+  return bridge::AtenFromLtcTensor(LazyTensor::layer_norm(self_tensor, lazy_tensors::util::ToVector<int64_t>(normalized_shape), weight_tensor, bias_tensor, eps, cudnn_enable));
+}
+
 at::Tensor LazyNativeFunctions::le(const at::Tensor& self, const at::Scalar& other) {
   LTC_FN_COUNTER("raf::");
   return bridge::AtenFromLtcTensor(LazyTensor::le(bridge::raf_backend::GetLtcTensor(self), other));
@@ -1811,6 +1813,10 @@ at::Tensor LazyNativeFunctions::mm(const at::Tensor& self, const at::Tensor& mat
 
 at::Tensor LazyNativeFunctions::matmul(const at::Tensor& self, const at::Tensor& other) {
   LTC_FN_COUNTER("raf::");
+  return aten_autograd_ops::MatMul::apply(self, other);
+
+  // return FALLBACK_ATEN_OP(matmul, self, other);
+  
   LazyTensor self_tensor = bridge::raf_backend::GetLtcTensor(self);
   LazyTensor other_tensor = bridge::raf_backend::GetLtcTensor(other);
   std::vector<int64_t> a_shape =
@@ -1819,6 +1825,12 @@ at::Tensor LazyNativeFunctions::matmul(const at::Tensor& self, const at::Tensor&
       lazy_tensors::util::ToVector<int64_t>(other_tensor.shape().get().dimensions());
   int64_t a_size = a_shape.size();
   int64_t b_size = b_shape.size();
+
+  // return bridge::AtenFromLtcTensor(LazyTensor::matmul(self_tensor, other_tensor, a_shape, b_shape));
+
+
+  // RATEX_VLOG(2) <<"a_shape=" << a_shape <<" b_shape=" << b_shape <<" a_size=" << a_size <<" b_size=" << b_size;
+
   int64_t unit_dim = -1;
   LazyTensor out;
 
@@ -1946,6 +1958,8 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> LazyNativeFunctions::native_batch
   const Device& device = input_tensor.GetDevice();
   LazyTensor running_mean_tensor = bridge::GetOrCreateLtcTensor(running_mean, device);
   LazyTensor running_var_tensor = bridge::GetOrCreateLtcTensor(running_var, device);
+  if(momentum == 0) momentum = 0.1;
+  if(eps == 0) eps = 1e-5;
   auto outputs = LazyTensor::native_batch_norm(
       bridge::raf_backend::GetLtcTensor(input), bridge::GetOrCreateLtcTensor(weight, device),
       bridge::GetOrCreateLtcTensor(bias, device), running_mean_tensor, running_var_tensor, training,

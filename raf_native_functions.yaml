@@ -304,7 +304,8 @@ supported:
   - tanh_backward
   - ger
   - matmul
-  - dropout
+  - layer_norm
 autograd:
   - max_pool2d
   - max_pool3d
+  - dropout

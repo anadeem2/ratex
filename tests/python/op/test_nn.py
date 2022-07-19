@@ -110,14 +110,75 @@ def test_matmul(shape):
         def forward(self, x_input, y_input):
             return torch.matmul(x_input, y_input)
 
-    for i in range(1, len(shape) + 1):
-        x_s = shape[::i]
-        x = torch.randn(x_s)
-        for j in range(1, len(shape) + 1):
-            y_s = shape[::j]
-            y = torch.randn(y_s)
-            verify_step(Model(), [x, y], jit_script=False)
+    # x = torch.randn(3,3)
+    # verify_step(Model(), [x, y], jit_script=False)
 
+    # for i in range(1, len(shape) + 1):
+    #     x_s = shape[::i]
+    #     x = torch.randn(x_s)
+    #     for j in range(1, len(shape) + 1):
+    #         y_s = shape[::j]
+    #         y = torch.randn(y_s)
+    #         verify_step(Model(), [x, y], jit_script=False)
+
+
+def test_softmax():
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.softmax = nn.Softmax()
+
+        def forward(self, x_input):
+            return self.softmax(x_input)
+
+    x = torch.randn(3, 3)
+
+    verify_step(Model(), [x], jit_script=False)
+
+
+def test_dropout():
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.dropout = nn.Dropout(p=0.2)
+
+        def forward(self, x_input):
+            return self.dropout(x_input)
+
+    x = torch.randn(20, 16)
+   
+    verify_step(Model(), [x], jit_script=False)
+
+def test_layer_norm():
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layer_norm = nn.LayerNorm(10)
+
+        def forward(self, x_input):
+            return self.layer_norm(x_input)
+    
+    batch, sentence_length, embedding_dim = 20, 5, 10
+    x = torch.randn(batch, sentence_length, embedding_dim)
+    
+
+    verify_step(Model(), [x], jit_script=False)
+
+@pytest.mark.parametrize("dtype", [torch.float32])
+def test_native_batch_norm(dtype):
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+
+        def forward(self, x, w, b, running_mean, running_var):
+            return torch.native_batch_norm(x, w, b, running_mean, running_var, False, 0.9, .001)
+
+    x = torch.randn(3, 3).to(dtype)
+    w = torch.randn(3, 3).to(dtype)
+    b = torch.randn(3).to(dtype)
+    running_mean = torch.randn(3).to(dtype)
+    running_var = torch.randn(3).to(dtype)
+    verify_step(Model(), [x, w, b, running_mean, running_var], jit_script=False)
 
 if __name__ == "__main__":
     pytest.main([__file__])

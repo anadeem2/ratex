@@ -52,6 +52,7 @@
 #include "lazy_tensor_core/csrc/ops/expand.h"
 #include "lazy_tensor_core/csrc/ops/exponential.h"
 #include "lazy_tensor_core/csrc/ops/embedding.h"
+#include "lazy_tensor_core/csrc/ops/embedding_backward.h"
 #include "lazy_tensor_core/csrc/ops/flip.h"
 #include "lazy_tensor_core/csrc/ops/gather.h"
 #include "lazy_tensor_core/csrc/ops/generic.h"
@@ -131,6 +132,7 @@
 #include "lazy_tensor_core/csrc/ops/upsample_nearest2d_backward.h"
 #include "lazy_tensor_core/csrc/ops/var.h"
 #include "lazy_tensor_core/csrc/ops/view.h"
+#include "lazy_tensor_core/csrc/ops/layer_norm.h"
 #include "lazy_tensor_core/csrc/shape_builder.h"
 #include "lazy_tensor_core/csrc/tensor.h"
 #include "lazy_tensor_core/csrc/tensor_ops.h"
@@ -141,6 +143,10 @@
 #include "lazy_tensors/computation_client/util.h"
 #include "lazy_tensors/literal_util.h"
 #include "torch/csrc/autograd/variable.h"
+#include "lazy_tensor_core/csrc/ops/matmul.h"
+#include "ratex/csrc/ops/unimplemented.h"
+#include "lazy_tensor_core/csrc/ops/dropout.h"
+#include "ratex/csrc/ops/dropout_backward.h"
 
 namespace torch_lazy_tensors {
 namespace {
@@ -753,8 +759,8 @@ void LazyTensor::bitwise_xor_out(LazyTensor& out, const LazyTensor& input,
 }
 
 LazyTensor LazyTensor::bmm(const LazyTensor& batch1, const LazyTensor& batch2) {
-  CheckBmmDimension(/*tag=*/"bmm", batch1, batch2);
-  return matmul(batch1, batch2);
+  // CheckBmmDimension(/*tag=*/"bmm", batch1, batch2);
+  return matmul(batch1, batch2, {3,3,3}, {3,3,3});
 }
 
 std::vector<LazyTensor> LazyTensor::broadcast_tensors(
@@ -992,6 +998,19 @@ LazyTensor LazyTensor::div(const LazyTensor& input, const at::Scalar& other) {
   return input.CreateFrom(input_value / other_value, scalar_type);
 }
 
+std::tuple<LazyTensor,LazyTensor, LazyTensor> LazyTensor::dropout(const LazyTensor& input, double p, c10::optional<bool> train) {
+  ir::NodePtr node = ir::MakeNode<ir::ops::Dropout>(input.GetIrValue(), p);
+  auto output = input.CreateFrom(ir::Value(node,0));
+  auto mask = input.CreateFrom(ir::Value(node,1));
+  auto reserve_space = input.CreateFrom(ir::Value(node,2));
+  return std::make_tuple(std::move(output), std::move(mask), std::move(reserve_space));
+}
+
+LazyTensor LazyTensor::dropout_backward(const LazyTensor& dy, const LazyTensor& mask, const LazyTensor& reserve_space) {
+  return dy.CreateFrom(
+  ir::MakeNode<ir::ops::DropoutBackward>(dy.GetIrValue(), mask.GetIrValue(), reserve_space.GetIrValue()));
+}
+
 LazyTensor LazyTensor::eq(const LazyTensor& input, const at::Scalar& other) {
   return DispatchComparisonOp(at::aten::eq, input, other);
 }
@@ -1021,8 +1040,8 @@ LazyTensor LazyTensor::embedding(const LazyTensor& weight, const LazyTensor& ind
 LazyTensor LazyTensor::embedding_dense_backward(const LazyTensor& grad_output,
                                                 const LazyTensor& indices, int64_t num_weights,
                                                 int64_t padding_idx, bool scale_grad_by_freq) {
-  return tensor_ops::EmbeddingDenseBackward(grad_output, indices, num_weights, padding_idx,
-                                            scale_grad_by_freq);
+    return grad_output.CreateFrom(
+      ir::MakeNode<ir::ops::EmbeddingBackward>(grad_output.GetIrValue(), indices.GetIrValue(), num_weights));
 }
 
 LazyTensor LazyTensor::erf(const LazyTensor& input) {
@@ -1272,6 +1291,10 @@ LazyTensor LazyTensor::l1_loss_backward(const LazyTensor& grad_output, const Laz
                                             target.GetIrValue(), GetReductionMode(reduction)));
 }
 
+LazyTensor LazyTensor::layer_norm(const LazyTensor & input, std::vector<int64_t> normalized_shape, const LazyTensor & weight, const LazyTensor & bias, double eps, bool cudnn_enable){
+  return input.CreateFrom(ir::MakeNode<ir::ops::LayerNorm>(input.GetIrValue(), Helpers::I64List(normalized_shape), weight.GetIrValue(), bias.GetIrValue(), eps, cudnn_enable));
+}
+
 LazyTensor LazyTensor::le(const LazyTensor& input, const at::Scalar& other) {
   return DispatchComparisonOp(at::aten::le, input, other);
 }
@@ -1408,8 +1431,10 @@ LazyTensor LazyTensor::masked_select(const LazyTensor& input, const LazyTensor& 
   return input.CreateFrom(ir::Value(node, 0));
 }
 
-LazyTensor LazyTensor::matmul(const LazyTensor& input, const LazyTensor& other) {
-  return input.CreateFrom(ir::ops::MatMul(input.GetIrValue(), other.GetIrValue()));
+LazyTensor LazyTensor::matmul(const LazyTensor& input, const LazyTensor& other, std::vector<int64_t> a_shape, std::vector<int64_t> b_shape) {
+  return input.CreateFrom(
+      ir::MakeNode<ir::ops::MatMul>(input.GetIrValue(), other.GetIrValue(),
+                                             a_shape, b_shape));
 }
 
 LazyTensor LazyTensor::max(const LazyTensor& input, const LazyTensor& other,
@@ -1573,7 +1598,7 @@ std::tuple<LazyTensor, LazyTensor, LazyTensor> LazyTensor::native_batch_norm(
       GetIrValueOrDefault(running_var, 0, features_shape, input.GetDevice());
   ir::NodePtr node = ir::MakeNode<ir::ops::NativeBatchNormForward>(
       input.GetIrValue(), weight_value, bias_value, running_mean_value, running_var_value, training,
-      eps);
+      momentum, eps);
   LazyTensor output = input.CreateFrom(ir::Value(node, 0));
   LazyTensor mean;
   LazyTensor variance_inverse;

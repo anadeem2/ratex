@@ -178,11 +178,11 @@ NodePtr Dot(const Value& input, const Value& weight) {
   return node;
 }
 
-NodePtr MatMul(const Value& lhs, const Value& rhs) {
-  NodePtr node = GenericOp(OpKind(at::aten::matmul), {lhs, rhs});
-  node->SetShapeDeferred([&]() { return compiler::NodeLowering::Get()->Infer(node.get()); });
-  return node;
-}
+// NodePtr MatMul(const Value& lhs, const Value& rhs) {
+//   NodePtr node = GenericOp(OpKind(at::aten::matmul), {lhs, rhs});
+//   node->SetShapeDeferred([&]() { return compiler::NodeLowering::Get()->Infer(node.get()); });
+//   return node;
+// }
 
 NodePtr AdaptiveAvgPool3dBackward(const Value& grad_output, const Value& input) {
   NodePtr node = GenericOp(OpKind(at::aten::adaptive_avg_pool3d_backward), {grad_output, input});
@@ -336,13 +336,7 @@ NodePtr Gelu(const Value& input) {
 }
 
 NodePtr GeluBackward(const Value& grad, const Value& input) {
-  ScopePusher ir_scope("aten::gelu_backward");
-  const float kAlpha = M_2_SQRTPI * M_SQRT1_2 * 0.5;
-  const lazy_tensors::Shape& shape = input.shape();
-  NodePtr scratch = Erf(input * ScalarOp(M_SQRT1_2, shape));
-  NodePtr dinput = Exp(input * input * ScalarOp(-0.5, shape));
-  return grad * (ScalarOp(0.5, shape) * (ScalarOp(1.0, shape) + scratch) +
-                 input * dinput * ScalarOp(kAlpha, shape));
+  return GenericOp(OpKind(at::aten::gelu_backward), {grad, input}, grad.shape());
 }
 
 NodePtr Lshift(const Value& input, const at::Scalar& other) {

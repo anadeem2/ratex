@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
+import _RATEXC
 
 import numpy as np
 import torch
@@ -66,6 +67,7 @@ def default_logger():
 
 
 logger = default_logger()  # pylint: disable=invalid-name
+_RATEXC._set_ratex_vlog_level(-5)
 
 
 def with_seed(seed=None):

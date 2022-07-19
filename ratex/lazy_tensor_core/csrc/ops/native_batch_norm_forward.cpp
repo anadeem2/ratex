@@ -17,23 +17,23 @@ namespace ops {
 
 NativeBatchNormForward::NativeBatchNormForward(const Value& input, const Value& weight,
                                                const Value& bias, const Value& running_mean,
-                                               const Value& running_var, bool training, double eps)
+                                               const Value& running_var, bool training, double momentum, double eps)
     : Node(ir::OpKind(at::aten::native_batch_norm),
            {input, weight, bias, running_mean, running_var},
            /*num_outputs=*/4, lazy_tensors::util::MHash(training, eps)),
-      training_(training),
+      training_(training), momentum_(momentum),
       eps_(eps) {
   SetShapeDeferred([&]() { return compiler::NodeLowering::Get()->Infer(this); });
 }
 
 NodePtr NativeBatchNormForward::Clone(OpList operands) const {
   return MakeNode<NativeBatchNormForward>(operands.at(0), operands.at(1), operands.at(2),
-                                          operands.at(3), operands.at(4), training_, eps_);
+                                          operands.at(3), operands.at(4), training_, momentum_, eps_);
 }
 
 std::string NativeBatchNormForward::ToString() const {
   std::stringstream ss;
-  ss << Node::ToString() << ", training=" << training_ << ", eps=" << eps_;
+  ss << Node::ToString() << ", training=" << training_ << ", momentum=" << momentum_ << ", eps=" << eps_;
   return ss.str();
 }
 

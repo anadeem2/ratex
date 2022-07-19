@@ -17,7 +17,8 @@
 #include "lazy_tensor_core/csrc/lowering_context.h"
 #include "lazy_tensors/computation_client/computation_client.h"
 #include "lazy_tensors/computation_client/debug_macros.h"
-
+#include "ratex/csrc/ops/unimplemented.h"
+#include "ratex/csrc/ops/raf_ops.h"
 namespace torch_lazy_tensors {
 namespace ir {
 namespace {
@@ -170,6 +171,9 @@ std::string GenerateTextNodeSpec(const Node* node, const NodeIdMap& id_map) {
   ss << ")";
   for (auto& tag : GetNodeTags(node)) {
     ss << ", " << tag.name << "=" << tag.value;
+  }
+  if(node->op() == *ir::ops::unimplemented){
+    ss << ", name=" << ir::NodeCast<ir::ops::Unimplemented>(node, *ir::ops::unimplemented)->name();
   }
   return ss.str();
 }

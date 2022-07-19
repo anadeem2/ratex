@@ -13,32 +13,25 @@ namespace torch_lazy_tensors {
 namespace ir {
 namespace ops {
 
-class NativeBatchNormForward : public Node {
+class MatMul : public Node {
  public:
-  NativeBatchNormForward(const Value& input, const Value& weight, const Value& bias,
-                         const Value& running_mean, const Value& running_var, bool training,
-                         double momentum, double eps);
+  MatMul(const Value& input, const Value& other, std::vector<int64_t> a_shape, std::vector<int64_t> b_shape);
 
   NodePtr Clone(OpList operands) const override;
 
   std::string ToString() const override;
 
-  bool training() const {
-    return training_;
+  std::vector<int64_t> a_shape() const {
+    return a_shape_;
   }
-
-  double momentum() const {
-    return momentum_;
-  }
-
-  double eps() const {
-    return eps_;
+    
+  std::vector<int64_t> b_shape() const {
+    return b_shape_;
   }
 
  private:
-  bool training_;
-  double momentum_;
-  double eps_;
+  std::vector<int64_t> a_shape_;
+  std::vector<int64_t> b_shape_;
 };
 
 }  // namespace ops

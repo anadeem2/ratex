@@ -444,6 +444,11 @@ class LazyTensor {
                         c10::optional<at::ScalarType> logical_element_type = c10::nullopt);
   static LazyTensor div(const LazyTensor& input, const at::Scalar& other);
 
+  static std::tuple<LazyTensor,LazyTensor, LazyTensor> dropout(const LazyTensor& input, double p, c10::optional<bool> train);
+
+  static LazyTensor dropout_backward(const LazyTensor& dy, const LazyTensor& mask, const LazyTensor& reserve_space);
+
+
   // A generalized contraction between tensors of arbitrary dimension defined by
   // the given equation and applied to the input tensors.
   static LazyTensor einsum(const std::string& equation,
@@ -585,6 +590,8 @@ class LazyTensor {
   static LazyTensor l1_loss_backward(const LazyTensor& grad_output, const LazyTensor& input,
                                      const LazyTensor& target, int64_t reduction);
 
+  static LazyTensor layer_norm(const LazyTensor & input, std::vector<int64_t> normalized_shape, const LazyTensor & weight, const LazyTensor & bias, double eps, bool cudnn_enable);
+
   static LazyTensor le(const LazyTensor& input, const at::Scalar& other);
 
   static LazyTensor le(const LazyTensor& input, const LazyTensor& other);
@@ -639,7 +646,7 @@ class LazyTensor {
 
   static LazyTensor masked_select(const LazyTensor& input, const LazyTensor& mask);
 
-  static LazyTensor matmul(const LazyTensor& input, const LazyTensor& other);
+  static LazyTensor matmul(const LazyTensor& input, const LazyTensor& other, std::vector<int64_t> a_shape, std::vector<int64_t> b_shape);
 
   static LazyTensor max(const LazyTensor& input, const LazyTensor& other,
                         c10::optional<at::ScalarType> logical_element_type = c10::nullopt);
