@@ -1118,6 +1118,7 @@ at::Tensor LazyNativeFunctions::embedding_dense_backward(const at::Tensor& grad_
                                                          int64_t num_weights, int64_t padding_idx,
                                                          bool scale_grad_by_freq) {
   LTC_FN_COUNTER("raf::");
+  // return FALLBACK_ATEN_OP(embedding_dense_backward, grad_output, indices, num_weights, padding_idx, scale_grad_by_freq);
   return bridge::AtenFromLtcTensor(LazyTensor::embedding_dense_backward(
       bridge::raf_backend::GetLtcTensor(grad_output), bridge::raf_backend::GetLtcTensor(indices),
       num_weights, padding_idx, scale_grad_by_freq));
@@ -1813,9 +1814,10 @@ at::Tensor LazyNativeFunctions::mm(const at::Tensor& self, const at::Tensor& mat
 
 at::Tensor LazyNativeFunctions::matmul(const at::Tensor& self, const at::Tensor& other) {
   LTC_FN_COUNTER("raf::");
-  return aten_autograd_ops::MatMul::apply(self, other);
 
   // return FALLBACK_ATEN_OP(matmul, self, other);
+
+  return aten_autograd_ops::MatMul::apply(self, other);
   
   LazyTensor self_tensor = bridge::raf_backend::GetLtcTensor(self);
   LazyTensor other_tensor = bridge::raf_backend::GetLtcTensor(other);
@@ -1861,7 +1863,8 @@ at::Tensor LazyNativeFunctions::matmul(const at::Tensor& self, const at::Tensor&
 
     if (unit_dim != -1) out = LazyTensor::unsqueeze(out, unit_dim);
 
-    return bridge::AtenFromLtcTensor(out);
+    // return aten_autograd_ops::MatMul::apply(bridge::AtenFromLtcTensor(out), bridge::AtenFromLtcTensor(self_tensor), bridge::AtenFromLtcTensor(other_tensor), a_size, b_size, unit_dim);
+
   } else if (a_size > 2) {
     // a is 3D and b is < 3D, try to squeeze a
     unit_dim = std::find(a_shape.begin(), a_shape.end(), 1) - a_shape.begin();
@@ -1881,7 +1884,7 @@ at::Tensor LazyNativeFunctions::matmul(const at::Tensor& self, const at::Tensor&
     other_tensor = LazyTensor::unsqueeze(other_tensor, 1);
   }
 
-  out = LazyTensor::mm(self_tensor, other_tensor);
+  out = LazyTensor::matmul(self_tensor, other_tensor, "matmul");
 
   if (b_size == 1) out = LazyTensor::squeeze(out, 1);
   if (a_size == 1) out = LazyTensor::squeeze(out, 0);
@@ -1890,7 +1893,7 @@ at::Tensor LazyNativeFunctions::matmul(const at::Tensor& self, const at::Tensor&
   else if (b_size > 2)
     out = LazyTensor::unsqueeze(out, 1);
 
-  return bridge::AtenFromLtcTensor(out);
+  // return aten_autograd_ops::MatMul::apply(bridge::AtenFromLtcTensor(out), bridge::AtenFromLtcTensor(self_tensor), bridge::AtenFromLtcTensor(other_tensor), a_size, b_size, unit_dim);
 }
 
 at::Tensor LazyNativeFunctions::mse_loss(const at::Tensor& self, const at::Tensor& target,

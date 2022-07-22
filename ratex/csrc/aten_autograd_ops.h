@@ -40,7 +40,7 @@ struct Dropout : public torch::autograd::Function<Dropout> {
 
 struct MatMul : public torch::autograd::Function<MatMul> {
   static torch::Tensor forward(torch::autograd::AutogradContext* ctx,
-                                                 const at::Tensor & input,const at::Tensor & other);
+                                                 const at::Tensor & input, const at::Tensor & other);
   static torch::autograd::variable_list backward(torch::autograd::AutogradContext* ctx,
                                                  torch::autograd::variable_list grad_output);
 };

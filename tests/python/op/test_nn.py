@@ -4,9 +4,10 @@
 import pytest
 import torch
 import torch.nn as nn
-
+import numpy as np
 import ratex
 from ratex.testing import verify_step
+from ratex.lazy_tensor_core.core import lazy_model as lm
 
 
 def test_conv():
@@ -108,10 +109,13 @@ def test_matmul(shape):
             super().__init__()
 
         def forward(self, x_input, y_input):
+            print(x_input.shape)
+            print(y_input.shape)
             return torch.matmul(x_input, y_input)
 
-    # x = torch.randn(3,3)
-    # verify_step(Model(), [x, y], jit_script=False)
+    x = torch.randn(3,3)
+    y = torch.randn(3,3)
+    verify_step(Model(), [x, y], jit_script=False)
 
     # for i in range(1, len(shape) + 1):
     #     x_s = shape[::i]
@@ -179,6 +183,37 @@ def test_native_batch_norm(dtype):
     running_mean = torch.randn(3).to(dtype)
     running_var = torch.randn(3).to(dtype)
     verify_step(Model(), [x, w, b, running_mean, running_var], jit_script=False)
+
+def test_backward():
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.softmax = nn.Softmax()
+            self.dropout =  nn.Dropout(p=0.2)
+            self.loss = nn.CrossEntropyLoss()
+        
+        def forward(self, x_input, y_input, target):
+            x = torch.matmul(x_input, y_input)
+            x = self.dropout(x)
+            x = self.softmax(x)
+            x = self.loss(x, target)
+            return x
+    
+    shape = (3, 3)
+    n_x = np.random.randn(*shape)
+    n_y = np.random.randn(*shape)
+    t_x_razor = torch.tensor(n_x, device="lazy", dtype=torch.float32, requires_grad=True)
+    t_y_razor = torch.tensor(n_y, device="lazy", dtype=torch.float32, requires_grad=True)
+    target = torch.empty(3, dtype=torch.long).random_(3).to("lazy")
+
+    model = Model()
+    model.train()
+    y = model(t_x_razor, t_y_razor, target)
+    loss = y.sum()
+    loss.backward()
+    lm.mark_step()
+    print(t_x_razor.grad)
+    print(t_y_razor.grad)
 
 if __name__ == "__main__":
     pytest.main([__file__])

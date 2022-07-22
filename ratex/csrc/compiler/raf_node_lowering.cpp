@@ -1140,23 +1140,24 @@ Var BuildMatMul(const std::vector<Var>& ops, const ir::ops::MatMul* node) {
   LTC_CHECK_EQ(node->operands().size(), 2) << "Unexpected number of operands";
   Var x = ops[0];
   Var y = ops[1];
-  Var mm;
-  std::vector<int64_t> a_shape = node->a_shape();
-  std::vector<int64_t> b_shape = node->b_shape();
-  if (a_shape.size() >2 && b_shape.size() > 2){
-    if(a_shape.size() > 3)
-      x = BindSymbol(raf::ir::Call(Op::Get("raf.op.squeeze"), {x}));
-    if(b_shape.size() > 3)
-      y = BindSymbol(raf::ir::Call(Op::Get("raf.op.squeeze"), {y}));
-    mm = BindSymbol(raf::ir::Call(Op::Get("raf.op.batch_matmul"), {x, y}));
-    if(a_shape.size() >3 || b_shape.size() > 3) mm = BindSymbol(raf::ir::Call(Op::Get("raf.op.expand_dims"), {mm, MakeConstant(Int(0))}));
-  }
-  else{
-    if (a_shape.size() >2) x = BindSymbol(raf::ir::Call(Op::Get("raf.op.squeeze"), {x}));
-    mm = BindSymbol(raf::ir::Call(Op::Get("raf.op.matmul"), {x, y}));
-    if(a_shape.size() >2) mm = BindSymbol(raf::ir::Call(Op::Get("raf.op.expand_dims"), {mm, MakeConstant(Int(0))}));
-  }
-  return mm;
+  return BindSymbol(raf::ir::Call(Op::Get("raf.op." + node->type()), {x, y}));
+  // Var mm;
+  // std::vector<int64_t> a_shape = node->a_shape();
+  // std::vector<int64_t> b_shape = node->b_shape();
+  // if (a_shape.size() >2 && b_shape.size() > 2){
+  //   if(a_shape.size() > 3)
+  //     x = BindSymbol(raf::ir::Call(Op::Get("raf.op.squeeze"), {x}));
+  //   if(b_shape.size() > 3)
+  //     y = BindSymbol(raf::ir::Call(Op::Get("raf.op.squeeze"), {y}));
+  //   mm = BindSymbol(raf::ir::Call(Op::Get("raf.op." #node->type()), {x, y}));
+  //   if(a_shape.size() >3 || b_shape.size() > 3) mm = BindSymbol(raf::ir::Call(Op::Get("raf.op.expand_dims"), {mm, MakeConstant(Int(0))}));
+  // }
+  // else{
+  //   if (a_shape.size() >2) x = BindSymbol(raf::ir::Call(Op::Get("raf.op.squeeze"), {x}));
+  //   mm = BindSymbol(raf::ir::Call(Op::Get("raf.op.matmul" #node->type()), {x, y}));
+  //   if(a_shape.size() >2) mm = BindSymbol(raf::ir::Call(Op::Get("raf.op.expand_dims"), {mm, MakeConstant(Int(0))}));
+  // }
+  // return mm;
 }
 
 Var RAFNodeLowering::LowerUnimplemented(const ir::Node* node) {

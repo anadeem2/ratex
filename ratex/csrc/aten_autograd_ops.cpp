@@ -148,6 +148,8 @@ torch::autograd::variable_list Dropout::backward(
 
 torch::Tensor MatMul::forward(torch::autograd::AutogradContext* ctx,
                                                  const at::Tensor & self, const at::Tensor & other) {
+
+
   LazyTensor self_tensor = bridge::GetLtcTensor(self);
   LazyTensor other_tensor = bridge::GetLtcTensor(other);
   std::vector<int64_t> a_shape =
@@ -156,13 +158,146 @@ torch::Tensor MatMul::forward(torch::autograd::AutogradContext* ctx,
       lazy_tensors::util::ToVector<int64_t>(other_tensor.shape().get().dimensions());
   int64_t a_size = a_shape.size();
   int64_t b_size = b_shape.size();
-   return bridge::AtenFromLtcTensor(LazyTensor::matmul(self_tensor, other_tensor, a_shape, b_shape));
+
+  // return bridge::AtenFromLtcTensor(LazyTensor::matmul(self_tensor, other_tensor, a_shape, b_shape));
+
+
+  // RATEX_VLOG(2) <<"a_shape=" << a_shape <<" b_shape=" << b_shape <<" a_size=" << a_size <<" b_size=" << b_size;
+
+  int64_t unit_dim = -1;
+  LazyTensor out;
+
+  // TODO support higher demension conversion to lower dim matmul
+  if (a_size > 4 || b_size > 4) {
+    return FALLBACK_ATEN_OP(matmul, self, other);
+  } else if (a_size > 2 && b_size > 2) {
+    // 4 dim matrix w/ unit dim (m5 support)
+    if (a_size > 3) {
+      // Convert to 3D by squeezing unit dim, fallback if cannot squeeze
+      unit_dim = std::find(a_shape.begin(), a_shape.end(), 1) - a_shape.begin();
+      if (unit_dim == a_size)
+        return FALLBACK_ATEN_OP(matmul, self, other);  // No unit dim - unsupported shape
+      self_tensor = LazyTensor::squeeze(self_tensor, unit_dim);
+    }
+    if (b_size > 3) {
+      // Convert to 3D by squeezing unit dim, fallback if cannot squeeze. Ensure if both a & b 4 dim
+      // have unit dim on same axis
+      auto b_dim = std::find(b_shape.begin(), b_shape.end(), 1) - b_shape.begin();
+      bool missing_unit_dim = b_dim == b_size;
+      bool broadcast = (b_dim == unit_dim || unit_dim == -1) ? false : true;
+      if (missing_unit_dim || broadcast) return FALLBACK_ATEN_OP(matmul, self, other);
+      unit_dim = b_dim;
+      other_tensor = LazyTensor::squeeze(other_tensor, unit_dim);
+    }
+
+    out = LazyTensor::bmm(self_tensor, other_tensor);
+
+    if (unit_dim != -1) out = LazyTensor::unsqueeze(out, unit_dim);
+
+    // return aten_autograd_ops::MatMul::apply(bridge::AtenFromLtcTensor(out), bridge::AtenFromLtcTensor(self_tensor), bridge::AtenFromLtcTensor(other_tensor), a_size, b_size, unit_dim);
+
+  } else {
+    if (a_size > 2) {
+    // a is 3D and b is < 3D, try to squeeze a
+    unit_dim = std::find(a_shape.begin(), a_shape.end(), 1) - a_shape.begin();
+    if (unit_dim == a_size)
+      return FALLBACK_ATEN_OP(matmul, self, other);  // No unit dim - unsupported shape
+    self_tensor = LazyTensor::squeeze(self_tensor, unit_dim);
+  } else if (a_size == 1) {
+    self_tensor = LazyTensor::unsqueeze(self_tensor, 0);
+  }
+  if (b_size > 2) {
+    // b is 3D and a is < 3D, try to squeeze b
+    unit_dim = std::find(b_shape.begin(), b_shape.end(), 1) - b_shape.begin();
+    if (unit_dim == b_size)
+      return FALLBACK_ATEN_OP(matmul, self, other);  // No unit dim - unsupported shape
+    other_tensor = LazyTensor::squeeze(other_tensor, unit_dim);
+  } else if (b_size == 1) {
+    other_tensor = LazyTensor::unsqueeze(other_tensor, 1);
+  }
+  
+
+  out = LazyTensor::matmul(self_tensor, other_tensor, "matmul");
+
+  if (b_size == 1) out = LazyTensor::squeeze(out, 1);
+  if (a_size == 1) out = LazyTensor::squeeze(out, 0);
+  if (a_size > 2)
+    out = LazyTensor::unsqueeze(out, 0);
+  else if (b_size > 2)
+    out = LazyTensor::unsqueeze(out, 1);
+
+  }
+  ctx->save_for_backward({bridge::AtenFromLtcTensor(self_tensor), bridge::AtenFromLtcTensor(other_tensor)});
+  ctx->saved_data["a_size"] = a_size;
+  ctx->saved_data["b_size"] = b_size;
+  ctx->saved_data["a_shape"] = a_shape;
+  ctx->saved_data["b_shape"] = b_shape;
+  ctx->saved_data["unit_dim"] = unit_dim;
+
+
+  //  return output;
+  return bridge::AtenFromLtcTensor(out);
 }
 
 torch::autograd::variable_list MatMul::backward(
     torch::autograd::AutogradContext* ctx, torch::autograd::variable_list grad_output) {
+  
+// TODO tranpose type handeling like RAF
 
-  return grad_output;
+  auto saved = ctx->get_saved_variables();
+  int64_t a_size = ctx->saved_data["a_size"].toInt();;
+  int64_t b_size = ctx->saved_data["b_size"].toInt();;
+  int64_t unit_dim = ctx->saved_data["unit_dim"].toInt();;
+  LazyTensor dy = bridge::GetLtcTensor(grad_output[0]);
+    std::vector<int64_t> g_shape =
+      lazy_tensors::util::ToVector<int64_t>(dy.shape().get().dimensions());
+  int64_t g_size = g_shape.size();
+  LazyTensor a = bridge::GetLtcTensor(saved[0]);
+  LazyTensor b = bridge::GetLtcTensor(saved[1]);
+
+      std::vector<int64_t> a_new =
+      lazy_tensors::util::ToVector<int64_t>(a.shape().get().dimensions());
+
+  LazyTensor grad_a;
+  LazyTensor grad_b;
+
+  auto a_shape = ctx->saved_data["a_shape"].toIntList().vec();
+  auto b_shape = ctx->saved_data["b_shape"].toIntList().vec();
+
+  std::cout<<" a_shape " << a_shape << " b_shape " << b_shape << " g_shape " << g_shape << "a_new "<< a_new;
+
+  if(a_size > 2 && b_size > 2){
+     if (g_size > 3) dy = LazyTensor::squeeze(dy);
+  grad_b = LazyTensor::matmul(dy, b, "batch_matmul_nt");
+  grad_a = LazyTensor::matmul(a, dy, "batch_matmul_tn");
+  if (g_size > 3) {
+    grad_b = LazyTensor::unsqueeze(grad_b, 0);
+    grad_a = LazyTensor::unsqueeze(grad_a, 0);
+  }
+  else{
+  if (a_size > 3) grad_a = LazyTensor::unsqueeze(grad_a, unit_dim);
+  if (b_size > 3) grad_b = LazyTensor::unsqueeze(grad_b, unit_dim);
+  }
+  }
+  else {
+    if (g_size > 2) dy = LazyTensor::squeeze(dy);
+  grad_b = LazyTensor::matmul(dy, b, "matmul_nt");
+  grad_a = LazyTensor::matmul(a, dy, "matmul_tn");
+  if (g_size > 2) {
+    grad_b = LazyTensor::unsqueeze(grad_b, 0);
+    grad_a = LazyTensor::unsqueeze(grad_a, 0);
+  }
+  else{
+  if (b_size == 1) grad_b = LazyTensor::squeeze(grad_b); // 1
+  else if (b_size > 2) grad_b = LazyTensor::unsqueeze(grad_b, 0); // dim = 1
+  if (a_size == 1) grad_a = LazyTensor::squeeze(grad_a);
+  else if (a_size > 2) grad_a = LazyTensor::unsqueeze(grad_a, 0);
+  }
+  }
+  
+  torch::autograd::variable_list grad_result = {bridge::AtenFromLtcTensor(grad_b), bridge::AtenFromLtcTensor(grad_a)};
+
+  return grad_result;
 }
 
 }  // namespace aten_autograd_ops

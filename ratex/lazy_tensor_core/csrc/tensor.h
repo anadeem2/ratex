@@ -646,7 +646,7 @@ class LazyTensor {
 
   static LazyTensor masked_select(const LazyTensor& input, const LazyTensor& mask);
 
-  static LazyTensor matmul(const LazyTensor& input, const LazyTensor& other, std::vector<int64_t> a_shape, std::vector<int64_t> b_shape);
+  static LazyTensor matmul(const LazyTensor& input, const LazyTensor& other, std::string type);
 
   static LazyTensor max(const LazyTensor& input, const LazyTensor& other,
                         c10::optional<at::ScalarType> logical_element_type = c10::nullopt);

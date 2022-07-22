@@ -759,8 +759,8 @@ void LazyTensor::bitwise_xor_out(LazyTensor& out, const LazyTensor& input,
 }
 
 LazyTensor LazyTensor::bmm(const LazyTensor& batch1, const LazyTensor& batch2) {
-  // CheckBmmDimension(/*tag=*/"bmm", batch1, batch2);
-  return matmul(batch1, batch2, {3,3,3}, {3,3,3});
+  CheckBmmDimension(/*tag=*/"bmm", batch1, batch2);
+  return matmul(batch1, batch2, "batch_matmul");
 }
 
 std::vector<LazyTensor> LazyTensor::broadcast_tensors(
@@ -1431,10 +1431,10 @@ LazyTensor LazyTensor::masked_select(const LazyTensor& input, const LazyTensor& 
   return input.CreateFrom(ir::Value(node, 0));
 }
 
-LazyTensor LazyTensor::matmul(const LazyTensor& input, const LazyTensor& other, std::vector<int64_t> a_shape, std::vector<int64_t> b_shape) {
+LazyTensor LazyTensor::matmul(const LazyTensor& input, const LazyTensor& other, std::string type) {
   return input.CreateFrom(
       ir::MakeNode<ir::ops::MatMul>(input.GetIrValue(), other.GetIrValue(),
-                                             a_shape, b_shape));
+                                             type));
 }
 
 LazyTensor LazyTensor::max(const LazyTensor& input, const LazyTensor& other,

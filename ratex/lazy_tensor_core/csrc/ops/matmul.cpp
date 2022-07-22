@@ -15,19 +15,19 @@ namespace torch_lazy_tensors {
 namespace ir {
 namespace ops {
 
-MatMul::MatMul(const Value& input, const Value& other, std::vector<int64_t> a_shape, std::vector<int64_t> b_shape)
+MatMul::MatMul(const Value& input, const Value& other, std::string type)
     : Node(ir::OpKind(at::aten::matmul), {input, other}),
-      a_shape_(a_shape), b_shape_(b_shape) {
+     type_(type) {
   SetShapeDeferred([&]() { return compiler::NodeLowering::Get()->Infer(this); });
 }
 
 NodePtr MatMul::Clone(OpList operands) const {
-  return MakeNode<MatMul>(operands.at(0), operands.at(1), a_shape_, b_shape_);
+  return MakeNode<MatMul>(operands.at(0), operands.at(1), type_);
 }
 
 std::string MatMul::ToString() const {
   std::stringstream ss;
-  ss << Node::ToString();
+  ss << Node::ToString() << " type= " << type_;
   return ss.str();
 }
 

@@ -303,9 +303,9 @@ supported:
   - sigmoid_backward
   - tanh_backward
   - ger
-  - matmul
   - layer_norm
 autograd:
   - max_pool2d
   - max_pool3d
   - dropout
+  - matmul
