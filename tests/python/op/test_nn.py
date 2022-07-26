@@ -215,5 +215,64 @@ def test_backward():
     print(t_x_razor.grad)
     print(t_y_razor.grad)
 
+def test_backward2():
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            # self.softmax = nn.Softmax()
+            # self.dropout =  nn.Dropout(p=0.2)
+            # self.loss = nn.CrossEntropyLoss()
+        
+        def forward(self, x_input, y_input, target):
+            x = torch.matmul(x_input, y_input)
+            # x = self.dropout(x)
+            # x = self.softmax(x)
+            # x = self.loss(x, target)
+            return x
+    
+    shape = (3, 3)
+    n_x = np.random.randn(*shape)
+    n_y = np.random.randn(*shape)
+    t_x_razor = torch.tensor(n_x, device="lazy", dtype=torch.float32, requires_grad=True)
+    t_y_razor = torch.tensor(n_y, device="lazy", dtype=torch.float32, requires_grad=True)
+    target = torch.empty(3, dtype=torch.long).random_(3).to("lazy")
+
+
+    model = Model()
+    model.to("lazy")
+    model.train()
+    y = model(t_x_razor, t_y_razor, target)
+    loss = y.sum()
+    loss.backward()
+    lm.mark_step()
+
+
+    t_x_cpu = torch.tensor(n_x, device="cpu", dtype=torch.float32, requires_grad=True)
+    t_y_cpu = torch.tensor(n_y, device="cpu", dtype=torch.float32, requires_grad=True)
+    target = torch.empty(3, dtype=torch.long).random_(3).to("cpu")
+
+    model = Model()
+    model.to("cpu")
+    model.train()
+    y = model(t_x_cpu, t_y_cpu, target)
+    loss = y.sum()
+    loss.backward()
+
+
+
+
+    print("\nT_X_Razor Grad: ", t_x_razor.grad)
+    print("\nT_Y_Razor Grad: ", t_y_razor.grad)
+    print("\nT_X_CPU Grad: ", t_x_cpu.grad)
+    print("\nT_Y_CPU Grad: ", t_y_cpu.grad)
+
+    t_x_razor.grad.to("cpu")
+    t_y_razor.grad.to("cpu")
+
+
+    torch.testing.assert_close(t_x_razor.grad, t_x_cpu.grad)
+    torch.testing.assert_close(t_y_razor.grad, t_y_cpu.grad)
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
