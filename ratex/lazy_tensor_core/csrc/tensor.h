@@ -924,6 +924,8 @@ class LazyTensor {
   static LazyTensor trace(const LazyTensor& input);
 
   // Swap given dimensions of the input.
+  static LazyTensor transpose_axes(const LazyTensor& input, std::vector<int64_t> dims);
+
   static LazyTensor transpose(const LazyTensor& input, int64_t dim0, int64_t dim1);
 
   // In-place version of the method above.

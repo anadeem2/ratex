@@ -13,6 +13,7 @@
 #include "lazy_tensor_core/csrc/torch_util.h"
 #include "ratex/csrc/LazyNativeFunctions.h"
 #include "ratex/csrc/aten_cpu_fallback.h"
+#include "ratex/csrc/utils/ratex_logging.h"
 
 namespace torch_lazy_tensors {
 namespace aten_autograd_ops {
@@ -115,6 +116,65 @@ torch::autograd::variable_list MaxPool3dAutogradFunction::backward(
   torch::Tensor undef;
   torch::autograd::variable_list grad_inputs = {grad, undef, undef, undef, undef, undef};
   return grad_inputs;
+}
+
+torch::Tensor MatMul::forward(torch::autograd::AutogradContext* ctx, const at::Tensor& self,
+                              const at::Tensor& other) {
+  ctx->save_for_backward({self, other});
+  LazyTensor self_tensor = bridge::GetLtcTensor(self);
+  LazyTensor other_tensor = bridge::GetLtcTensor(other);
+  return bridge::AtenFromLtcTensor(LazyTensor::matmul(self_tensor, other_tensor));
+}
+
+torch::autograd::variable_list MatMul::backward(torch::autograd::AutogradContext* ctx,
+                                                torch::autograd::variable_list grad_output) {
+  // TODO tranpose type handeling like RAF
+
+  auto saved = ctx->get_saved_variables();
+  LazyTensor g = bridge::GetLtcTensor(grad_output[0]);
+  LazyTensor a = bridge::GetLtcTensor(saved[0]);
+  LazyTensor b = bridge::GetLtcTensor(saved[1]);
+
+  LazyTensor grad_a;
+  LazyTensor grad_b;
+
+  std::vector<int64_t> a_shape =
+      lazy_tensors::util::ToVector<int64_t>(a.shape().get().dimensions());
+  std::vector<int64_t> b_shape =
+      lazy_tensors::util::ToVector<int64_t>(b.shape().get().dimensions());
+
+  std::vector<int64_t> g_shape =
+      lazy_tensors::util::ToVector<int64_t>(g.shape().get().dimensions());
+  RATEX_VLOG(3) << "grad_a_shape= " << a_shape << " grad_b_shape= " << b_shape
+                << "grad_shape= " << g_shape << "\n";
+
+  std::vector<int64_t> t_b;
+  t_b = lazy_tensors::util::Iota<int64_t>(b_shape.size());
+  // std::iota(std::rbegin(b_shape), std::rend(b_shape), 0);
+  std::vector<int64_t> transpose_b(t_b.rbegin(), t_b.rend());
+  b = LazyTensor::transpose_axes(b, transpose_b);
+
+  std::vector<int64_t> t_a;
+  t_a = lazy_tensors::util::Iota<int64_t>(a_shape.size());
+  // std::iota(std::rbegin(a_shape), std::rend(a_shape), 0);
+  std::vector<int64_t> transpose_a(t_a.rbegin(), t_a.rend());
+
+  a = LazyTensor::transpose_axes(a, transpose_a);
+
+  // std::vector<int64_t> t_g;
+  // t_g = lazy_tensors::util::Iota<int64_t>(g_shape.size());
+  // // std::iota(std::rbegin(a_shape), std::rend(a_shape), 0);
+  // std::vector<int64_t> transpose_g(t_g.rbegin(), t_g.rend());
+
+  // g = LazyTensor::transpose_axes(g, transpose_g);
+
+  grad_b = LazyTensor::matmul(g, b);  //_nt
+  grad_a = LazyTensor::matmul(a, g);  // _tn
+
+  torch::autograd::variable_list grad_result = {bridge::AtenFromLtcTensor(grad_b),
+                                                bridge::AtenFromLtcTensor(grad_a)};
+
+  return grad_result;
 }
 
 }  // namespace aten_autograd_ops

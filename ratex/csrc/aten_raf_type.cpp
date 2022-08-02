@@ -1743,8 +1743,7 @@ at::Tensor LazyNativeFunctions::max_unpool3d(const at::Tensor& self, const at::T
 
 at::Tensor LazyNativeFunctions::matmul(const at::Tensor& self, const at::Tensor& other) {
   LTC_FN_COUNTER("raf::");
-  return bridge::AtenFromLtcTensor(LazyTensor::matmul(bridge::raf_backend::GetLtcTensor(self),
-                                                      bridge::raf_backend::GetLtcTensor(other)));
+  return aten_autograd_ops::MatMul::apply(self, other);
 }
 at::Tensor LazyNativeFunctions::mean(const at::Tensor& self, c10::optional<at::ScalarType> dtype) {
   LTC_FN_COUNTER("raf::");

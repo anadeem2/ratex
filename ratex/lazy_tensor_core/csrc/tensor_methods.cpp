@@ -2205,6 +2205,10 @@ LazyTensor LazyTensor::trace(const LazyTensor& input) {
   return LazyTensor::sum(input.CreateFrom(eye * input.GetIrValue()), {0, 1}, false, input.dtype());
 }
 
+LazyTensor LazyTensor::transpose_axes(const LazyTensor& input, std::vector<int64_t> dims) {
+  return input.CreateFrom(ir::MakeNode<ir::ops::Permute>(input.GetIrValue(), dims));
+}
+
 LazyTensor LazyTensor::transpose(const LazyTensor& input, int64_t dim0, int64_t dim1) {
   auto input_shape = input.shape();
   auto permute_dims = Helpers::MakeTransposePermutation(
