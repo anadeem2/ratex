@@ -1,0 +1,5 @@
+{
+    "docker": "ci-job-ratex-docker",
+    "GPU": "ci-job-ratex-gpu",
+    "multi-GPU": "ci-job-ratex-multi-gpu"
+}
