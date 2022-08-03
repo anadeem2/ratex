@@ -230,20 +230,20 @@ def test_backward2():
             # x = self.loss(x, target)
             return x
     
-    shape = (3, 3)
+    shape = (3,)
     n_x = np.random.randn(*shape)
-    n_y = np.random.randn(*shape)
+    n_y = np.random.randn(3,)
     t_x_razor = torch.tensor(n_x, device="lazy", dtype=torch.float32, requires_grad=True)
     t_y_razor = torch.tensor(n_y, device="lazy", dtype=torch.float32, requires_grad=True)
     target = torch.empty(3, dtype=torch.long).random_(3).to("lazy")
 
 
-    model = Model()
-    model.to("lazy")
-    model.train()
-    y = model(t_x_razor, t_y_razor, target)
-    loss = y.sum()
-    loss.backward()
+    modelr = Model()
+    modelr.to("lazy")
+    modelr.train()
+    yr = modelr(t_x_razor, t_y_razor, target)
+    lossr = yr.sum()
+    lossr.backward()
     lm.mark_step()
 
 
@@ -266,12 +266,10 @@ def test_backward2():
     print("\nT_X_CPU Grad: ", t_x_cpu.grad)
     print("\nT_Y_CPU Grad: ", t_y_cpu.grad)
 
-    t_x_razor.grad.to("cpu")
-    t_y_razor.grad.to("cpu")
 
 
-    torch.testing.assert_close(t_x_razor.grad, t_x_cpu.grad)
-    torch.testing.assert_close(t_y_razor.grad, t_y_cpu.grad)
+    torch.testing.assert_close(t_x_razor.grad.to("cpu"), t_x_cpu.grad)
+    torch.testing.assert_close(t_y_razor.grad.to("cpu"), t_y_cpu.grad)
 
 
 if __name__ == "__main__":
