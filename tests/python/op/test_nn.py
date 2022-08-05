@@ -118,6 +118,20 @@ def test_softmax():
 
     verify_step(Model(), [t_x_cpu], jit_script=False)
     verify_step(Model(), [t_x_cpu], jit_script=False, with_backward=True)
+    
+@pytest.mark.parametrize("x_shape", [(3,), (3, 3), (3, 3, 3), (3, 3, 3, 3)])
+@pytest.mark.parametrize("y_shape", [(3,), (3, 3), (3, 3, 3), (3, 3, 3, 3)])
+def test_matmul(x_shape, y_shape):
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+
+        def forward(self, x_input, y_input):
+            return torch.matmul(x_input, y_input)
+
+    x = torch.randn(*x_shape, requires_grad=True)
+    y = torch.randn(*y_shape, requires_grad=True)
+    verify_step(Model(), [x, y], jit_script=False, with_backward=True)
 
 
 @pytest.mark.parametrize("dtype", [torch.float32])
