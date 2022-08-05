@@ -101,7 +101,9 @@ def test_embedding(dtype, norm_type):
             return self.embedding(x_input)
 
     x = torch.randint(10, (3, 3))
-    verify_step(Model(), [x], jit_script=False)
+    # x = torch.randn((3,3), requires_grad=True)
+
+    verify_step(Model(), [x], jit_script=False, with_backward=True)
 
 
 def test_softmax():

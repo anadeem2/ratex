@@ -120,6 +120,7 @@
 #include "lazy_tensor_core/csrc/ops/var.h"
 #include "lazy_tensor_core/csrc/ops/view.h"
 #include "lazy_tensor_core/csrc/ops/embedding.h"
+#include "lazy_tensor_core/csrc/ops/embedding_backward.h"
 #include "lazy_tensor_core/csrc/ops/matmul.h"
 #include "lazy_tensor_core/csrc/tensor_util.h"
 #include "lazy_tensor_core/csrc/helpers.h"
@@ -245,6 +246,7 @@ class RAFNodeLowering : public NodeLowering {
   DECLARE_OP2(MaxInDim);
   DECLARE_OP2(ArgMax);
   DECLARE_OP2(Embedding);
+  DECLARE_OP2(EmbeddingBackward);
   DECLARE_OP(Gelu);
   DECLARE_OP(GeluBackward);
   DECLARE_OP2(Mean);
@@ -283,6 +285,7 @@ class RAFNodeLowering : public NodeLowering {
   lazy_tensors::Shape InferArgMax(const ir::ops::ArgMax* node);
   lazy_tensors::Shape InferConvolutionOverrideable(const ir::ops::ConvolutionOverrideable* node);
   lazy_tensors::Shape InferEmbedding(const ir::ops::Embedding* node);
+  lazy_tensors::Shape InferEmbeddingBackward(const ir::ops::EmbeddingBackward* node);
   lazy_tensors::Shape InferMean(const ir::ops::Mean* node);
   lazy_tensors::Shape InferMatMul(const ir::ops::MatMul* node);
 };
@@ -357,6 +360,7 @@ Var RAFNodeLowering::LowerToRAF(const ir::Node* node) {
     HANDLE_GENERIC_OP2(MaxInDim, at::aten::max)
     HANDLE_GENERIC_OP2(ArgMax, at::aten::argmax)
     HANDLE_GENERIC_OP2(Embedding, at::aten::embedding)
+    HANDLE_GENERIC_OP2(EmbeddingBackward, at::aten::embedding_backward)
     HANDLE_GENERIC_OP(Gelu, at::aten::gelu)
     HANDLE_GENERIC_OP(GeluBackward, at::aten::gelu_backward)
     HANDLE_GENERIC_OP2(Mean, at::aten::mean)
@@ -1055,6 +1059,22 @@ Var RAFNodeLowering::LowerEmbedding(const ir::ops::Embedding* node) {
   return BuildEmbedding(ops, node);
 }
 
+Var BuildEmbeddingBackward(const std::vector<Var>& ops, const ir::ops::EmbeddingBackward* node) {
+  LTC_CHECK_EQ(ops.size(), 2U);
+  Var grad = ops[0];
+  Var indices = ops[1];
+  Expr num_weights = MakeConstant(Int(node->num_weights()));
+  return BindSymbol(raf::ir::Call(Op::Get("raf.op.embedding_dx"), {grad, indices, num_weights}));
+}
+
+Var RAFNodeLowering::LowerEmbeddingBackward(const ir::ops::EmbeddingBackward* node) {
+  std::vector<Var> ops;
+  for (const auto& op : node->operands()) {
+    ops.push_back(loctx()->GetOutputOp(op));
+  }
+  return BuildEmbeddingBackward(ops, node);
+}
+
 Var BuildMean(const std::vector<Var>& ops, const ir::ops::Mean* node) {
   LTC_CHECK_EQ(node->operands().size(), 1U);
   Var x = ops[0];
@@ -1529,6 +1549,10 @@ lazy_tensors::Shape RAFNodeLowering::Infer(const ir::Node* node) {
       return InferEmbedding(
           ir::NodeCast<ir::ops::Embedding>(node, ir::OpKind(at::aten::embedding)));
     }
+    case at::aten::embedding_backward: {
+      return InferEmbeddingBackward(
+          ir::NodeCast<ir::ops::EmbeddingBackward>(node, ir::OpKind(at::aten::embedding_backward)));
+    }
     case at::aten::mean: {
       return InferMean(ir::NodeCast<ir::ops::Mean>(node, ir::OpKind(at::aten::mean)));
     }
@@ -1833,6 +1857,16 @@ lazy_tensors::Shape RAFNodeLowering::InferEmbedding(const ir::ops::Embedding* no
     ops.push_back(MakeVar("operand", ToRAFType(x.shape())));
   }
   Var out = BuildEmbedding(ops, node);
+  Expr body = InferType(ExtractBinding(out, ops));
+  return ToLTCShape(body->checked_type());
+}
+
+lazy_tensors::Shape RAFNodeLowering::InferEmbeddingBackward(const ir::ops::EmbeddingBackward* node) {
+  std::vector<Var> ops;
+  for (const auto& x : node->operands()) {
+    ops.push_back(MakeVar("operand", ToRAFType(x.shape())));
+  }
+  Var out = BuildEmbeddingBackward(ops, node);
   Expr body = InferType(ExtractBinding(out, ops));
   return ToLTCShape(body->checked_type());
 }
