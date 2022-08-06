@@ -1118,9 +1118,12 @@ at::Tensor LazyNativeFunctions::embedding_dense_backward(const at::Tensor& grad_
                                                          int64_t num_weights, int64_t padding_idx,
                                                          bool scale_grad_by_freq) {
   LTC_FN_COUNTER("raf::");
-  return bridge::AtenFromLtcTensor(LazyTensor::embedding_dense_backward(
-      bridge::raf_backend::GetLtcTensor(grad_output), bridge::raf_backend::GetLtcTensor(indices),
-      num_weights, padding_idx, scale_grad_by_freq));
+  auto out = LazyTensor::embedding_dense_backward(
+        bridge::raf_backend::GetLtcTensor(grad_output), bridge::raf_backend::GetLtcTensor(indices),
+        num_weights, padding_idx, scale_grad_by_freq);
+      out = LazyTensor::unsqueeze(out, 1);
+      out = LazyTensor::repeat(out, {16});
+    return bridge::AtenFromLtcTensor(out);
 }
 
 at::Tensor LazyNativeFunctions::empty(at::IntArrayRef size, c10::optional<at::ScalarType> dtype,
