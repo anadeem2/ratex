@@ -102,6 +102,7 @@
 #include "lazy_tensor_core/csrc/ops/squeeze.h"
 #include "lazy_tensor_core/csrc/ops/stack.h"
 #include "lazy_tensor_core/csrc/ops/std.h"
+#include "lazy_tensor_core/csrc/ops/repeat.h"
 #include "lazy_tensor_core/csrc/ops/sum.h"
 #include "lazy_tensor_core/csrc/ops/svd.h"
 #include "lazy_tensor_core/csrc/ops/symeig.h"
@@ -210,6 +211,7 @@ class RAFNodeLowering : public NodeLowering {
   DECLARE_OP2(Constant);
   DECLARE_OP2(Sum);
   DECLARE_OP2(Any);
+  DECLARE_OP2(Repeat);
   DECLARE_OP2(Scalar);
   DECLARE_OP(Relu);
   DECLARE_OP(Sqrt);
@@ -276,6 +278,7 @@ class RAFNodeLowering : public NodeLowering {
   lazy_tensors::Shape InferCast(const ir::ops::Cast* node);
   lazy_tensors::Shape InferSum(const ir::ops::Sum* node);
   lazy_tensors::Shape InferAny(const ir::ops::Any* node);
+  lazy_tensors::Shape InferRepeat(const ir::ops::Repeat* node);
   lazy_tensors::Shape InferConstantPadNd(const ir::ops::ConstantPadNd* node);
   lazy_tensors::Shape InferPermute(const ir::ops::Permute* node);
   lazy_tensors::Shape InferCat(const ir::ops::Cat* node);
@@ -358,6 +361,7 @@ Var RAFNodeLowering::LowerToRAF(const ir::Node* node) {
     HANDLE_GENERIC_OP2(AsStrided, at::aten::as_strided)
     HANDLE_GENERIC_OP2(Sum, at::aten::sum)
     HANDLE_GENERIC_OP2(Any, at::aten::any)
+    HANDLE_GENERIC_OP2(Repeat, at::aten::repeat)
     HANDLE_GENERIC_OP2(ConstantPadNd, at::aten::constant_pad_nd)
     HANDLE_GENERIC_OP2(Scatter, at::aten::scatter)
     HANDLE_GENERIC_OP2(Cat, at::aten::cat)
@@ -706,6 +710,20 @@ Var RAFNodeLowering::LowerAny(const ir::ops::Any* node) {
   Var x = loctx()->GetOutputOp(node->operand(0));
   return BuildAny({x}, node);
 }
+
+Var BuildRepeat(const std::vector<Var>& ops, const ir::ops::Repeat* node) {
+  LTC_CHECK_EQ(ops.size(), 1U);
+  Var x = ops[0];
+  Expr repeats = MakeConstant(Int(node->repeats()[0]));
+  return BindSymbol(
+      raf::ir::Call(Op::Get("raf.op.repeat"), {x, repeats, MakeConstant(Int(1))}));
+}
+
+Var RAFNodeLowering::LowerRepeat(const ir::ops::Repeat* node) {
+  Var x = loctx()->GetOutputOp(node->operand(0));
+  return BuildRepeat({x}, node);
+}
+
 
 template <class NllLossType>
 Var BuildNllLoss(const std::vector<Var>& ops, const NllLossType* node) {
@@ -1546,6 +1564,9 @@ lazy_tensors::Shape RAFNodeLowering::Infer(const ir::Node* node) {
     case at::aten::any: {
       return InferAny(ir::NodeCast<ir::ops::Any>(node, ir::OpKind(at::aten::any)));
     }
+    case at::aten::repeat: {
+      return InferRepeat(ir::NodeCast<ir::ops::Repeat>(node, ir::OpKind(at::aten::repeat)));
+    }
     case at::aten::constant_pad_nd: {
       return InferConstantPadNd(
           ir::NodeCast<ir::ops::ConstantPadNd>(node, ir::OpKind(at::aten::constant_pad_nd)));
@@ -1716,6 +1737,18 @@ lazy_tensors::Shape RAFNodeLowering::InferAny(const ir::ops::Any* node) {
   Expr body = InferType(ExtractBinding(out, ops));
   return ToLTCShape(body->checked_type());
 }
+
+lazy_tensors::Shape RAFNodeLowering::InferRepeat(const ir::ops::Repeat* node) {
+  LTC_CHECK_EQ(node->operands().size(), 1U);
+  std::vector<Var> ops;
+  for (const auto& x : node->operands()) {
+    ops.push_back(MakeVar("operand", ToRAFType(x.shape())));
+  }
+  Var out = BuildRepeat(ops, node);
+  Expr body = InferType(ExtractBinding(out, ops));
+  return ToLTCShape(body->checked_type());
+}
+
 
 lazy_tensors::Shape RAFNodeLowering::InferConstantPadNd(const ir::ops::ConstantPadNd* node) {
   LTC_CHECK_EQ(node->operands().size(), 1U);

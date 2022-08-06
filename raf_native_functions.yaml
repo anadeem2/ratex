@@ -53,7 +53,7 @@ supported:
   - div.Scalar
   - dot
   - embedding
-  - embedding_dense_backward
+  - embedding_backward
   - empty.memory_format
   - resize_
   - empty_strided

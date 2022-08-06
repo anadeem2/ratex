@@ -1113,17 +1113,20 @@ at::Tensor LazyNativeFunctions::embedding(const at::Tensor& weight, const at::Te
                                                          scale_grad_by_freq, sparse));
 }
 
-at::Tensor LazyNativeFunctions::embedding_dense_backward(const at::Tensor& grad_output,
+at::Tensor LazyNativeFunctions::embedding_backward(const at::Tensor& grad_output,
                                                          const at::Tensor& indices,
                                                          int64_t num_weights, int64_t padding_idx,
-                                                         bool scale_grad_by_freq) {
+                                                         bool scale_grad_by_freq, bool sparse) {
   LTC_FN_COUNTER("raf::");
-  // return FALLBACK_ATEN_OP(embedding_dense_backward, grad_output, indices, num_weights, padding_idx, scale_grad_by_freq);
-  return bridge::AtenFromLtcTensor(LazyTensor::embedding_dense_backward(
+  // return FALLBACK_ATEN_OP(embedding_backward, grad_output, indices, num_weights, padding_idx, scale_grad_by_freq);
+  auto out = LazyTensor::embedding_dense_backward(
       bridge::raf_backend::GetLtcTensor(grad_output), bridge::raf_backend::GetLtcTensor(indices),
-      num_weights, padding_idx, scale_grad_by_freq));
+      num_weights, padding_idx, scale_grad_by_freq);
+  // out = LazyTensor::cat({out, bridge::raf_backend::GetLtcTensor(indices)}, 0);
+    out = LazyTensor::unsqueeze(out, 1);
+    out = LazyTensor::repeat(out, {16});
+  return bridge::AtenFromLtcTensor(out);
 }
-
 at::Tensor LazyNativeFunctions::empty(at::IntArrayRef size, c10::optional<at::ScalarType> dtype,
                                       c10::optional<at::Layout> layout,
                                       c10::optional<at::Device> device,
